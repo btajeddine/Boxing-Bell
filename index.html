@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Corner Bell — Round Timer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
+<style>
+/* =====================================================
+   CORNER BELL — boxing round timer.
+   The colours mean something: RED corner = work,
+   BLUE corner = rest, gold = get ready. Readable from
+   across a gym on a phone propped against a water bottle.
+   ===================================================== */
+:root {
+  --bg: #14161B;
+  --panel: #1E2129;
+  --line: #2E3340;
+  --text: #F2F3F5;
+  --dim: #8A90A0;
+  --red: #E5484D;      /* work — red corner */
+  --red-deep: #3A1418;
+  --blue: #3E8FDD;     /* rest — blue corner */
+  --blue-deep: #14273A;
+  --gold: #E9B44C;     /* prep */
+  --gold-deep: #3A2F14;
+  --mono: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  display: flex; flex-direction: column; align-items: center;
+  transition: background .6s ease;
+}
+body.phase-work { background: var(--red-deep); }
+body.phase-rest { background: var(--blue-deep); }
+body.phase-prep { background: var(--gold-deep); }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+.app { width: 100%; max-width: 460px; padding: 18px 16px 30px; display: flex; flex-direction: column; min-height: 100dvh; }
+
+/* ---------- Header ---------- */
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+header h1 { font-size: 1.05rem; letter-spacing: .06em; text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
+.mute-btn { font-size: 1.2rem; padding: 6px 10px; border-radius: 10px; background: var(--panel); }
+
+/* ---------- Presets ---------- */
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 12px; }
+.preset {
+  background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px;
+  padding: 9px 4px; font-size: .72rem; font-weight: 700; text-align: center; color: var(--dim);
+  transition: all .15s ease;
+}
+.preset small { display: block; font-weight: 600; font-size: .62rem; margin-top: 1px; opacity: .8; }
+.preset.active { border-color: var(--red); color: var(--text); }
+
+/* ---------- Settings ---------- */
+.settings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.setting { background: var(--panel); border-radius: 14px; padding: 10px 6px; text-align: center; }
+.setting .lbl { font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-bottom: 6px; }
+.stepper { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.stepper button {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--line);
+  font-size: 1.05rem; font-weight: 700; display: grid; place-items: center;
+}
+.stepper button:active { transform: scale(.9); }
+.stepper .val { font-family: var(--mono); font-weight: 700; font-size: .95rem; min-width: 52px; }
+.settings.locked { opacity: .35; pointer-events: none; }
+
+/* ---------- Main display ---------- */
+.display { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 6px 0; }
+.phase {
+  font-size: .95rem; font-weight: 900; letter-spacing: .3em; text-transform: uppercase;
+  padding: 6px 20px 6px 24px; border-radius: 999px; background: var(--panel);
+}
+.phase.work { color: var(--red); } .phase.rest { color: var(--blue); } .phase.prep { color: var(--gold); }
+.clock {
+  font-family: var(--mono); font-weight: 700; line-height: 1;
+  font-size: clamp(88px, 30vw, 150px); font-variant-numeric: tabular-nums;
+}
+.clock.warning { animation: throb .5s ease infinite; color: var(--gold); }
+@keyframes throb { 50% { opacity: .55; } }
+.round-label { font-size: 1rem; color: var(--dim); font-weight: 700; letter-spacing: .1em; }
+
+/* Round progress dots */
+.dots { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; max-width: 320px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); transition: all .3s ease; }
+.dot.done { background: var(--red); }
+.dot.now { background: var(--text); transform: scale(1.35); }
+
+/* ---------- Controls ---------- */
+.controls { display: flex; gap: 10px; }
+.ctl {
+  flex: 1; padding: 18px; border-radius: 18px; font-size: 1.05rem; font-weight: 900;
+  letter-spacing: .08em; text-transform: uppercase; transition: transform .12s ease;
+}
+.ctl:active { transform: scale(.96); }
+.ctl.start { background: var(--red); color: #fff; box-shadow: 0 8px 26px rgba(229, 72, 77, .35); }
+.ctl.pause { background: var(--gold); color: #14161B; }
+.ctl.reset { flex: 0 0 30%; background: var(--panel); color: var(--dim); }
+.hint { text-align: center; color: var(--dim); font-size: .7rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>🥊 Corner Bell</h1>
+    <button class="mute-btn" id="btn-mute" aria-label="Toggle sound">🔊</button>
+  </header>
+
+  <div class="presets" id="presets"></div>
+
+  <div class="settings" id="settings">
+    <div class="setting">
+      <div class="lbl">Rounds</div>
+      <div class="stepper">
+        <button data-adj="rounds:-1">−</button>
+        <span class="val" id="v-rounds">3</span>
+        <button data-adj="rounds:1">＋</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lbl">Round</div>
+      <div class="stepper">
+        <button data-adj="work:-30">−</button>
+        <span class="val" id="v-work">3:00</span>
+        <button data-adj="work:30">＋</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lbl">Rest</div>
+      <div class="stepper">
+        <button data-adj="rest:-15">−</button>
+        <span class="val" id="v-rest">1:00</span>
+        <button data-adj="rest:15">＋</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="display">
+    <div class="phase" id="phase">READY</div>
+    <div class="clock" id="clock">3:00</div>
+    <div class="round-label" id="round-label">3 rounds · press start</div>
+    <div class="dots" id="dots"></div>
+  </div>
+
+  <div class="controls">
+    <button class="ctl reset" id="btn-reset">Reset</button>
+    <button class="ctl start" id="btn-main">Start</button>
+  </div>
+  <p class="hint">Screen stays awake while the timer runs · 10-second warning clacks before every bell</p>
+</div>
+
+<script>
+"use strict";
+
+/* ============ CONFIG / STATE ============ */
+const PRESETS = [
+  { name: "Beginner", sub: "3 × 2:00", rounds: 3, work: 120, rest: 60 },
+  { name: "Standard", sub: "5 × 3:00", rounds: 5, work: 180, rest: 60 },
+  { name: "Pro",      sub: "12 × 3:00", rounds: 12, work: 180, rest: 60 },
+  { name: "HIIT",     sub: "8 × 0:30", rounds: 8, work: 30, rest: 15 }
+];
+
+const cfg = { rounds: 3, work: 180, rest: 60 };
+const PREP_SECONDS = 10;
+
+const state = {
+  running: false,
+  phase: "idle",        // idle | prep | work | rest | done
+  round: 1,
+  remaining: cfg.work,  // seconds left in current phase
+  tickId: null,
+  endAt: 0              // wall-clock end of current phase (drift-proof)
+};
+
+const $ = (s) => document.querySelector(s);
+
+/* ============ SOUND (WebAudio — no files) ============ */
+const Sound = {
+  ctx: null, muted: localStorage.getItem("cb_muted") === "1",
+  ensure() {
+    if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) this.ctx = new AC(); }
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+  },
+  tone(freq, dur, vol, type, when = 0) {
+    if (this.muted) return; this.ensure(); if (!this.ctx) return;
+    const t = this.ctx.currentTime + when;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.05);
+  },
+  /* Ring-style bell: two partials, rung N times */
+  bell(times = 1) {
+    for (let i = 0; i < times; i++) {
+      this.tone(880, 0.9, 0.25, "triangle", i * 0.35);
+      this.tone(1320, 0.6, 0.12, "sine", i * 0.35);
+    }
+  },
+  clack() { this.tone(220, 0.05, 0.3, "square"); },
+  toggle() { this.muted = !this.muted; localStorage.setItem("cb_muted", this.muted ? "1" : "0"); }
+};
+
+/* ============ WAKE LOCK (keep screen on) ============ */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    else if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { /* unsupported — non-fatal */ }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.running) keepAwake(true);
+});
+
+/* ============ HELPERS ============ */
+function fmt(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/* ============ SETTINGS UI ============ */
+function paintSettings() {
+  $("#v-rounds").textContent = cfg.rounds;
+  $("#v-work").textContent = fmt(cfg.work);
+  $("#v-rest").textContent = fmt(cfg.rest);
+}
+
+document.querySelectorAll("[data-adj]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const [key, deltaStr] = btn.dataset.adj.split(":");
+    const delta = Number(deltaStr);
+    if (key === "rounds") cfg.rounds = Math.min(20, Math.max(1, cfg.rounds + delta));
+    if (key === "work")   cfg.work   = Math.min(600, Math.max(30, cfg.work + delta));
+    if (key === "rest")   cfg.rest   = Math.min(300, Math.max(15, cfg.rest + delta));
+    clearPresetHighlight();
+    paintSettings();
+    if (state.phase === "idle") resetTimer();
+  });
+});
+
+/* Presets */
+const presetBox = $("#presets");
+PRESETS.forEach((p, i) => {
+  const b = document.createElement("button");
+  b.className = "preset";
+  b.innerHTML = `${p.name}<small>${p.sub}</small>`;
+  b.addEventListener("click", () => {
+    Object.assign(cfg, { rounds: p.rounds, work: p.work, rest: p.rest });
+    clearPresetHighlight();
+    b.classList.add("active");
+    paintSettings();
+    resetTimer();
+  });
+  presetBox.appendChild(b);
+});
+function clearPresetHighlight() {
+  presetBox.querySelectorAll(".preset").forEach((x) => x.classList.remove("active"));
+}
+
+/* ============ TIMER CORE ============
+   Drift-proof: each phase stores a wall-clock end time and
+   we recompute remaining seconds every tick, so the timer
+   stays accurate even if the tab throttles. */
+function startPhase(phase, seconds) {
+  state.phase = phase;
+  state.remaining = seconds;
+  state.endAt = Date.now() + seconds * 1000;
+  paintPhase();
+}
+
+function tick() {
+  const remaining = Math.max(0, Math.ceil((state.endAt - Date.now()) / 1000));
+  if (remaining !== state.remaining) {
+    state.remaining = remaining;
+    // Warning clacks in the final 10s of WORK rounds only
+    if (state.phase === "work" && remaining <= 10 && remaining > 0) Sound.clack();
+    paintClock();
+  }
+  if (remaining <= 0) advance();
+}
+
+function advance() {
+  if (state.phase === "prep") {
+    Sound.bell(1);                        // ding — fight!
+    startPhase("work", cfg.work);
+  } else if (state.phase === "work") {
+    if (state.round >= cfg.rounds) {      // final bell
+      Sound.bell(3);
+      finish();
+      return;
+    }
+    Sound.bell(1);
+    startPhase("rest", cfg.rest);
+  } else if (state.phase === "rest") {
+    state.round++;
+    Sound.bell(1);
+    startPhase("work", cfg.work);
+  }
+}
+
+function startPause() {
+  Sound.ensure(); // unlock audio on user gesture (required on mobile)
+  if (!state.running) {
+    state.running = true;
+    if (state.phase === "idle" || state.phase === "done") {
+      state.round = 1;
+      startPhase("prep", PREP_SECONDS);
+    } else {
+      state.endAt = Date.now() + state.remaining * 1000; // resume
+    }
+    state.tickId = setInterval(tick, 200);
+    keepAwake(true);
+    $("#settings").classList.add("locked");
+  } else {
+    state.running = false;
+    clearInterval(state.tickId);
+    keepAwake(false);
+  }
+  paintControls();
+}
+
+function resetTimer() {
+  state.running = false;
+  clearInterval(state.tickId);
+  keepAwake(false);
+  state.phase = "idle";
+  state.round = 1;
+  state.remaining = cfg.work;
+  $("#settings").classList.remove("locked");
+  paintPhase();
+  paintControls();
+}
+
+function finish() {
+  state.running = false;
+  clearInterval(state.tickId);
+  keepAwake(false);
+  state.phase = "done";
+  $("#settings").classList.remove("locked");
+  paintPhase();
+  paintControls();
+}
+
+/* ============ PAINTING ============ */
+function paintPhase() {
+  const el = $("#phase");
+  document.body.className = "";
+  el.className = "phase";
+
+  if (state.phase === "prep") { el.textContent = "GET READY"; el.classList.add("prep"); document.body.classList.add("phase-prep"); }
+  else if (state.phase === "work") { el.textContent = "FIGHT"; el.classList.add("work"); document.body.classList.add("phase-work"); }
+  else if (state.phase === "rest") { el.textContent = "REST"; el.classList.add("rest"); document.body.classList.add("phase-rest"); }
+  else if (state.phase === "done") { el.textContent = "DONE 🏆"; }
+  else el.textContent = "READY";
+
+  $("#round-label").textContent =
+    state.phase === "idle" ? `${cfg.rounds} rounds · press start` :
+    state.phase === "done" ? `${cfg.rounds} rounds complete — nice work` :
+    `Round ${state.round} of ${cfg.rounds}`;
+
+  paintDots();
+  paintClock();
+}
+
+function paintClock() {
+  const c = $("#clock");
+  c.textContent = state.phase === "idle" ? fmt(cfg.work) : state.phase === "done" ? "0:00" : fmt(state.remaining);
+  c.classList.toggle("warning", state.phase === "work" && state.remaining <= 10 && state.running);
+}
+
+function paintDots() {
+  const box = $("#dots");
+  box.innerHTML = "";
+  for (let i = 1; i <= cfg.rounds; i++) {
+    const d = document.createElement("div");
+    d.className = "dot";
+    if (state.phase !== "idle") {
+      if (i < state.round || state.phase === "done") d.classList.add("done");
+      else if (i === state.round) d.classList.add("now");
+    }
+    box.appendChild(d);
+  }
+}
+
+function paintControls() {
+  const b = $("#btn-main");
+  b.textContent = state.running ? "Pause" : (state.phase === "idle" || state.phase === "done") ? "Start" : "Resume";
+  b.className = "ctl " + (state.running ? "pause" : "start");
+}
+
+/* ============ WIRING ============ */
+$("#btn-main").addEventListener("click", startPause);
+$("#btn-reset").addEventListener("click", resetTimer);
+$("#btn-mute").addEventListener("click", () => {
+  Sound.toggle();
+  $("#btn-mute").textContent = Sound.muted ? "🔇" : "🔊";
+});
+$("#btn-mute").textContent = Sound.muted ? "🔇" : "🔊";
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); startPause(); }
+  if (e.key.toLowerCase() === "r") resetTimer();
+});
+
+paintSettings();
+resetTimer();
+</script>
+</body>
+</html>
